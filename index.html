@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WMS · Live Inventory</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --green: #22c55e;
+      --yellow: #facc15;
+      --red: #ef4444;
+      --border: #1f2933;
+    }
+
+    * { box-sizing: border-box; font-family: Inter, system-ui; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+
+    header {
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 { font-size: 18px; margin: 0; }
+    header span { font-size: 12px; color: var(--muted); }
+
+    .container { padding: 24px; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 16px;
+      border-radius: 10px;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: #374151; }
+
+    .card p { margin: 0; font-size: 12px; color: var(--muted); }
+    .card h2 { margin: 8px 0 0; font-size: 22px; }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 12px;
+    }
+
+    input {
+      background: #020617;
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: var(--text);
+      width: 260px;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #374151;
+    }
+
+    select {
+      background: #020617;
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th { 
+      color: var(--muted); 
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    th:hover { color: var(--text); }
+
+    tr:hover { background: #020617; }
+
+    .stock.green { color: var(--green); font-weight: 500; }
+    .stock.yellow { color: var(--yellow); font-weight: 500; }
+    .stock.red { color: var(--red); font-weight: 500; }
+
+    footer {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .sort-icon {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 10px;
+      opacity: 0.5;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 768px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .toolbar { flex-direction: column; align-items: stretch; }
+      input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>WMS · Live Inventory (Calculated)</h1>
+  <span id="lastSync">Last Sync: 24 Dec 2025 · 18:42</span>
+</header>
+
+<div class="container">
+
+  <div class="stats">
+    <div class="card"><p>Total SKUs</p><h2 id="totalSKUs">0</h2></div>
+    <div class="card"><p>Total Inbound</p><h2 id="totalInbound">0</h2></div>
+    <div class="card"><p>Total Outbound</p><h2 id="totalOutbound">0</h2></div>
+    <div class="card"><p>Net Stock</p><h2 id="netStock">0</h2></div>
+  </div>
+
+  <div class="toolbar">
+    <input id="searchInput" placeholder="Search SKU / Part / Name" />
+    <select id="filterStock">
+      <option value="all">All Stock Levels</option>
+      <option value="green">In Stock</option>
+      <option value="yellow">Low Stock</option>
+      <option value="red">Out of Stock</option>
+    </select>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th data-sort="sku">SKU / PART <span class="sort-icon">↕</span></th>
+        <th data-sort="name">PRODUCT NAME <span class="sort-icon">↕</span></th>
+        <th data-sort="inbound">INBOUND <span class="sort-icon">↕</span></th>
+        <th data-sort="outbound">OUTBOUND <span class="sort-icon">↕</span></th>
+        <th data-sort="available">AVAILABLE <span class="sort-icon">↕</span></th>
+        <th data-sort="lastMove">LAST MOVE <span class="sort-icon">↕</span></th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+    </tbody>
+  </table>
+
+  <footer>
+    * Inventory shown is movement-based and calculated from inbound/outbound data.
+  </footer>
+
+</div>
+
+<script>
+const inventoryData = [
+  { sku: "BOS-12345", name: "Bosch Oil Filter", inbound: 1200, outbound: 950, available: 250, lastMove: "2h ago", lastMoveMin: 120 },
+  { sku: "BOS-77821", name: "Brake Pad Set", inbound: 3500, outbound: 3120, available: 380, lastMove: "15m ago", lastMoveMin: 15 },
+  { sku: "MHL-33210", name: "Clutch Plate", inbound: 820, outbound: 820, available: 0, lastMove: "1d ago", lastMoveMin: 1440 },
+  { sku: "TVS-99112", name: "Spark Plug", inbound: 5000, outbound: 4100, available: 900, lastMove: "5h ago", lastMoveMin: 300 },
+  { sku: "BOS-44567", name: "Air Filter", inbound: 2100, outbound: 1950, available: 150, lastMove: "30m ago", lastMoveMin: 30 },
+  { sku: "MHL-55678", name: "Timing Belt", inbound: 1500, outbound: 1480, available: 20, lastMove: "4h ago", lastMoveMin: 240 },
+  { sku: "TVS-66789", name: "Fuel Injector", inbound: 4200, outbound: 3800, available: 400, lastMove: "1h ago", lastMoveMin: 60 },
+  { sku: "BOS-77890", name: "Radiator", inbound: 980, outbound: 980, available: 0, lastMove: "3d ago", lastMoveMin: 4320 },
+  { sku: "MHL-88901", name: "Alternator", inbound: 1800, outbound: 1650, available: 150, lastMove: "6h ago", lastMoveMin: 360 },
+  { sku: "TVS-99012", name: "Battery", inbound: 3200, outbound: 2850, available: 350, lastMove: "45m ago", lastMoveMin: 45 }
+];
+
+let currentSort = { column: null, ascending: true };
+let filteredData = [...inventoryData];
+
+function getStockClass(available) {
+  if (available === 0) return 'red';
+  if (available < 200) return 'yellow';
+  return 'green';
+}
+
+function updateStats(data) {
+  document.getElementById('totalSKUs').textContent = data.length.toLocaleString();
+  const totalIn = data.reduce((sum, item) => sum + item.inbound, 0);
+  const totalOut = data.reduce((sum, item) => sum + item.outbound, 0);
+  document.getElementById('totalInbound').textContent = totalIn.toLocaleString();
+  document.getElementById('totalOutbound').textContent = totalOut.toLocaleString();
+  document.getElementById('netStock').textContent = (totalIn - totalOut).toLocaleString();
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('tableBody');
+  
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No items found</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = data.map(item => `
+    <tr>
+      <td>${item.sku}</td>
+      <td>${item.name}</td>
+      <td>${item.inbound.toLocaleString()}</td>
+      <td>${item.outbound.toLocaleString()}</td>
+      <td class="stock ${getStockClass(item.available)}">${item.available.toLocaleString()}</td>
+      <td>${item.lastMove}</td>
+    </tr>
+  `).join('');
+}
+
+function sortData(column) {
+  if (currentSort.column === column) {
+    currentSort.ascending = !currentSort.ascending;
+  } else {
+    currentSort.column = column;
+    currentSort.ascending = true;
+  }
+  
+  filteredData.sort((a, b) => {
+    let valA = a[column];
+    let valB = b[column];
+    
+    if (column === 'lastMove') {
+      valA = a.lastMoveMin;
+      valB = b.lastMoveMin;
+    }
+    
+    if (typeof valA === 'string') {
+      return currentSort.ascending ? 
+        valA.localeCompare(valB) : valB.localeCompare(valA);
+    }
+    
+    return currentSort.ascending ? valA - valB : valB - valA;
+  });
+  
+  renderTable(filteredData);
+}
+
+function filterData() {
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+  const stockFilter = document.getElementById('filterStock').value;
+  
+  filteredData = inventoryData.filter(item => {
+    const matchesSearch = item.sku.toLowerCase().includes(searchTerm) || 
+                         item.name.toLowerCase().includes(searchTerm);
+    
+    if (!matchesSearch) return false;
+    
+    if (stockFilter === 'all') return true;
+    return getStockClass(item.available) === stockFilter;
+  });
+  
+  updateStats(filteredData);
+  renderTable(filteredData);
+}
+
+document.getElementById('searchInput').addEventListener('input', filterData);
+document.getElementById('filterStock').addEventListener('change', filterData);
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    sortData(th.dataset.sort);
+  });
+});
+
+updateStats(inventoryData);
+renderTable(inventoryData);
+</script>
+
+</body>
+</html>

@@ -1,37 +1,55 @@
-import { buildInventory } from "./inventory.js";
+import { calculateInventory } from "./inventory.js";
 
-export async function renderUI() {
-  const data = await buildInventory();
+let inventory = [];
 
-  // Totals
-  let totalInbound = 0;
-  let totalOutbound = 0;
+function applyFilters() {
+  const q = document.getElementById("searchInput").value.toLowerCase();
+  const f = document.getElementById("stockFilter").value;
 
-  data.forEach(i => {
-    totalInbound += i.inbound;
-    totalOutbound += i.outbound;
+  const filtered = inventory.filter(i => {
+    const matchText = i.sku.toLowerCase().includes(q);
+    const matchStock =
+      f === "all" ||
+      (f === "in" && i.available > 0) ||
+      (f === "out" && i.available <= 0);
+    return matchText && matchStock;
   });
 
-  document.getElementById("totalInbound").innerText = totalInbound;
-  document.getElementById("totalOutbound").innerText = totalOutbound;
-  document.getElementById("totalSkus").innerText = data.length;
-  document.getElementById("netStock").innerText =
+  renderTable(filtered);
+  renderStats(filtered);
+}
+
+function renderStats(data) {
+  const totalInbound = data.reduce((s, i) => s + i.inbound, 0);
+  const totalOutbound = data.reduce((s, i) => s + i.outbound, 0);
+
+  document.getElementById("totalSKUs").textContent = data.length;
+  document.getElementById("totalInbound").textContent = totalInbound;
+  document.getElementById("totalOutbound").textContent = totalOutbound;
+  document.getElementById("netStock").textContent =
     totalInbound - totalOutbound;
+}
 
-  // Table
-  const tbody = document.getElementById("inventoryBody");
+function renderTable(data) {
+  const tbody = document.getElementById("tableBody");
   tbody.innerHTML = "";
-
-  data.forEach(item => {
+  data.forEach(i => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${item.sku}</td>
-      <td>${item.productName}</td>
-      <td>${item.inbound}</td>
-      <td>${item.outbound}</td>
-      <td>${item.available}</td>
-      <td>${item.lastMove || "-"}</td>
+      <td>${i.sku}</td>
+      <td>${i.inbound}</td>
+      <td>${i.outbound}</td>
+      <td>${i.available}</td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+export async function renderInventoryUI() {
+  inventory = await calculateInventory();
+  renderStats(inventory);
+  renderTable(inventory);
+
+  document.getElementById("searchInput").addEventListener("input", applyFilters);
+  document.getElementById("stockFilter").addEventListener("change", applyFilters);
 }

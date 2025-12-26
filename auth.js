@@ -1,6 +1,6 @@
 import { CONFIG } from "./config.js";
 
-let accessToken = null;
+let token = null;
 
 export async function login(email, password) {
   const res = await fetch(`${CONFIG.WMS_BASE_URL}/user/login`, {
@@ -12,18 +12,16 @@ export async function login(email, password) {
     })
   });
 
-  if (!res.ok) {
-    throw new Error("Login failed");
-  }
+  if (!res.ok) throw new Error("Login failed");
 
   const data = await res.json();
-  accessToken = data.data?.accessToken || data.accessToken;
-  return accessToken;
+  token = data.data?.accessToken || data.accessToken;
+  return token;
 }
 
 export function getAuthHeaders() {
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${accessToken}`
+    Authorization: `Bearer ${token}`
   };
 }

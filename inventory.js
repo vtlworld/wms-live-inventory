@@ -1,68 +1,41 @@
-import { fetchInbound } from "./inbound.js";
-import { fetchOutbound } from "./outbound.js";
+// inventory.js
+import { getInbound, getOutbound } from "./dataSource.js";
 
-/**
- * Build live inventory from inbound & outbound movements
- * Expected fields (adjust if names differ):
- *  - sku / partNo
- *  - quantity
- *  - productName
- */
-export async function buildInventory() {
-  const [inbound, outbound] = await Promise.all([
-    fetchInbound(),
-    fetchOutbound()
-  ]);
+export async function calculateInventory() {
+  const inbound = await getInbound();
+  const outbound = await getOutbound();
 
-  const map = new Map();
+  const map = {};
 
-  // Add inbound
-  inbound.forEach(row => {
-    const sku = row.sku || row.partNo;
-    if (!sku) return;
-
-    if (!map.has(sku)) {
-      map.set(sku, {
-        sku,
-        productName: row.productName || "",
+  // add inbound
+  inbound.forEach(item => {
+    if (!map[item.sku]) {
+      map[item.sku] = {
+        sku: item.sku,
         inbound: 0,
-        outbound: 0,
-        available: 0,
-        lastMove: null
-      });
+        outbound: 0
+      };
     }
-
-    const item = map.get(sku);
-    item.inbound += Number(row.quantity || 0);
-    item.lastMove = row.updatedAt || row.createdAt || item.lastMove;
+    map[item.sku].inbound += item.qty;
   });
 
-  // Subtract outbound
-  outbound.forEach(row => {
-    const sku = row.sku || row.partNo;
-    if (!sku) return;
-
-    if (!map.has(sku)) {
-      map.set(sku, {
-        sku,
-        productName: row.productName || "",
+  // subtract outbound
+  outbound.forEach(item => {
+    if (!map[item.sku]) {
+      map[item.sku] = {
+        sku: item.sku,
         inbound: 0,
-        outbound: 0,
-        available: 0,
-        lastMove: null
-      });
+        outbound: 0
+      };
     }
-
-    const item = map.get(sku);
-    item.outbound += Number(row.quantity || 0);
-    item.lastMove = row.updatedAt || row.createdAt || item.lastMove;
+    map[item.sku].outbound += item.qty;
   });
 
-  // Calculate available
-  map.forEach(item => {
-    item.available = item.inbound - item.outbound;
-  });
-
-  return Array.from(map.values());
+  // final calculation
+  return Object.values(map).map(item => ({
+    sku: item.sku,
+    inbound: item.inbound,
+    outbound: item.outbound,
+    available: item.inbound - item.outbound
+  }));
 }
-

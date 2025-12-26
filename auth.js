@@ -1,19 +1,29 @@
-import { login } from "./auth.js";
+import { CONFIG } from "./config.js";
 
-async function init() {
-  // ❌ do NOT auto login
+let accessToken = null;
+
+export async function login(email, password) {
+  const res = await fetch(`${CONFIG.WMS_BASE_URL}/user/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      emailAddress: email,
+      password: password
+    })
+  });
+
+  if (!res.ok) {
+    throw new Error("Login failed");
+  }
+
+  const data = await res.json();
+  accessToken = data.data?.accessToken || data.accessToken;
+  return accessToken;
 }
 
-document.getElementById("loginBtn").addEventListener("click", async () => {
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-
-  try {
-    await login(email, password);
-    console.log("Login success");
-  } catch (e) {
-    alert("Login failed");
-  }
-});
-
-init();
+export function getAuthHeaders() {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`
+  };
+}

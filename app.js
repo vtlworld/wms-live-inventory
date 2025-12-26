@@ -1,6 +1,2 @@
-// app.js
 import { renderInventoryUI } from "./ui.js";
-
-document.addEventListener("DOMContentLoaded", () => {
-  renderInventoryUI();
-});
+document.addEventListener("DOMContentLoaded", renderInventoryUI);
